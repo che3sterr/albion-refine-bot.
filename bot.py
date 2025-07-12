@@ -84,7 +84,7 @@ async def buy_city_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.message.reply_text("Выбери город переработки:", reply_markup=reply_markup)
     return REFINE_CITY
 
-async def refine_city_selected(update: Update, context: Update, context: ContextTypes.DEFAULT_TYPE):
+async def refine_city_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     context.user_data["refine_city"] = query.data

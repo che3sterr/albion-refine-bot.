@@ -10,8 +10,14 @@ from telegram.ext import (
     filters
 )
 import requests
-import json
 import os
+
+# ================== НАСТРОЙКИ ==================
+TOKEN = '7388144074:AAFkIqUuXeJTIZPB3zE3nHuR6OYpgcf80NU'
+WEBHOOK_URL = 'https://albion-refine-bot-che3sterr.onrender.com'
+SECRET_TOKEN = 'AlbionBot$Refine2023#Secure@Render'
+PORT = 10000
+# ================================================
 
 # Настройка логирования
 logging.basicConfig(
@@ -20,10 +26,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Токен бота из переменных окружения
-TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '7388144074:AAFkIqUuXeJTIZPB3zE3nHuR6OYpgcf80NU')
-
-# Списки данных
+# Данные бота
 RESOURCES = ["WOOD", "ORE", "FIBER", "HIDE", "ROCK"]
 TIERS = ["T2", "T3", "T4", "T4.1", "T4.2", "T4.3", "T4.4", "T5", "T5.1", "T5.2", 
          "T5.3", "T5.4", "T6", "T6.1", "T6.2", "T6.3", "T6.4", "T7", "T7.1", 
@@ -41,12 +44,11 @@ REFINING_BONUSES = {
     "Black Market": {}
 }
 
-# Состояния для ConversationHandler
-MODE, RESOURCE, TIER, BUY_CITY, REFINE_CITY, SELL_CITY, RRR, TAX, PRICES = range(9)
+# Состояния ConversationHandler
+(MODE, RESOURCE, TIER, BUY_CITY, 
+ REFINE_CITY, SELL_CITY, RRR, TAX, PRICES) = range(9)
 
-# Создаем приложение
-app = Application.builder().token(TOKEN).build()
-
+# ============= ОСНОВНЫЕ ФУНКЦИИ БОТА =============
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Привет! Это бот для расчёта прибыли от переработки ресурсов в Albion Online.\n"
@@ -256,7 +258,7 @@ async def best(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         if raw_price == 0 or refined_price == 0:
                             continue
                         
-                        rrr = 15.2  # Базовый RRR (можно настроить)
+                        rrr = 15.2  # Базовый RRR
                         bonus_rrr = REFINING_BONUSES.get(refine_city, {}).get(resource, 0)
                         total_rrr = rrr + (rrr * bonus_rrr)
                         material_cost = raw_price * (1 - total_rrr / 100)
@@ -297,7 +299,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Операция отменена.")
     return ConversationHandler.END
 
-# Настройка обработчиков
+# ============ ЗАПУСК ПРИЛОЖЕНИЯ ============
 def setup_handlers():
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("refine", refine)],
@@ -312,14 +314,30 @@ def setup_handlers():
             TAX: [MessageHandler(filters.TEXT & ~filters.COMMAND, tax_entered)],
             PRICES: [MessageHandler(filters.TEXT & ~filters.COMMAND, prices_entered)],
         },
-        fallbacks=[CommandHandler("cancel", cancel)]
+        fallbacks=[CommandHandler("cancel", cancel)],
+        per_message=True
     )
     
     app.add_handler(conv_handler)
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("best", best))
 
-
 if __name__ == '__main__':
+    # Инициализация приложения
+    app = Application.builder().token(TOKEN).build()
     setup_handlers()
-    app.run_polling()  # Самый простой рабочий вариант
+    
+    # Автоматический выбор режима запуска
+    try:
+        # Пытаемся использовать webhook
+        app.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            webhook_url=WEBHOOK_URL,
+            secret_token=SECRET_TOKEN
+        )
+        logger.info("Бот запущен в webhook режиме")
+    except Exception as e:
+        # Если webhook не сработал - переключаемся на polling
+        logger.warning(f"Ошибка webhook ({e}), переключаемся на polling")
+        app.run_polling()

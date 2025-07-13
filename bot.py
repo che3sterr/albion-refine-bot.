@@ -298,7 +298,31 @@ async def best(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Операция отменена.")
     return ConversationHandler.END
+# ====== НАЧАЛО ДОБАВЛЯЕМОГО КОДА ======
+from threading import Thread
+import requests
+import time
 
+async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик для проверки работы бота"""
+    await update.message.reply_text("✅ Бот активен")
+    return "pong"
+
+def keep_alive():
+    """Функция для периодического пробуждения сервиса"""
+    while True:
+        time.sleep(240)  # Каждые 4 минуты
+        try:
+            requests.get(f'https://albion-refine-bot.onrender.com/ping')
+        except Exception as e:
+            print(f"Ping error: {e}")
+
+# Добавляем обработчик команды /ping
+app.add_handler(CommandHandler("ping", ping))
+
+# Запускаем фоновый поток
+Thread(target=keep_alive, daemon=True).start()
+# ====== КОНЕЦ ДОБАВЛЯЕМОГО КОДА ======
 # ============ ЗАПУСК ПРИЛОЖЕНИЯ ============
 def setup_handlers():
     conv_handler = ConversationHandler(
@@ -321,23 +345,7 @@ def setup_handlers():
     app.add_handler(conv_handler)
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("best", best))
-
 if __name__ == '__main__':
-    # Инициализация приложения
-    app = Application.builder().token(TOKEN).build()
     setup_handlers()
-    
-    # Автоматический выбор режима запуска
-    try:
-        # Пытаемся использовать webhook
-        app.run_webhook(
-            listen="0.0.0.0",
-            port=PORT,
-            webhook_url=WEBHOOK_URL,
-            secret_token=SECRET_TOKEN
-        )
-        logger.info("Бот запущен в webhook режиме")
-    except Exception as e:
-        # Если webhook не сработал - переключаемся на polling
-        logger.warning(f"Ошибка webhook ({e}), переключаемся на polling")
-        app.run_polling()
+    print("🟢 Бот запущен в polling-режиме")
+    app.run_polling(drop_pending_updates=True)

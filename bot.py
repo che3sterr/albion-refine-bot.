@@ -11,15 +11,16 @@ from telegram.ext import (
 )
 import requests
 import os
+from threading import Thread
+import time
 
 # ================== НАСТРОЙКИ ==================
 TOKEN = '7388144074:AAFkIqUuXeJTIZPB3zE3nHuR6OYpgcf80NU'
-SECRET_TOKEN = 'SimpleToken123'  # Только латиница/цифры
-WEBHOOK_URL = 'https://albion-refine-bot.onrender.com'  # Ваш URL из Render
+SECRET_TOKEN = 'SimpleToken123'
+WEBHOOK_URL = 'https://albion-refine-bot.onrender.com'
 PORT = 10000
 # ================================================
 
-# Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
@@ -54,6 +55,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Привет! Это бот для расчёта прибыли от переработки ресурсов в Albion Online.\n"
         "Используй /refine для расчёта прибыли или /best для самых выгодных предложений."
     )
+
+async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("✅ Бот активен")
 
 async def refine(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
@@ -198,133 +202,121 @@ async def calculate_auto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Запрос к API
     api_url = f"https://www.albion-online-data.com/api/v2/stats/prices/{raw_item},{refined_item}?locations={buy_city},{sell_city}"
-    response = requests.get(api_url)
-    if response.status_code != 200:
-        await update.message.reply_text("Ошибка при получении данных из API. Попробуй позже.")
-        return ConversationHandler.END
+    try:
+        response = requests.get(api_url, timeout=10)
+        if response.status_code != 200:
+            await update.message.reply_text("Ошибка при получении данных из API. Попробуй позже.")
+            return ConversationHandler.END
     
-    data = response.json()
-    raw_price = next((item["sell_price_min"] for item in data if item["item_id"] == raw_item and item["city"] == buy_city), 0)
-    refined_price = next((item["sell_price_min"] for item in data if item["item_id"] == refined_item and item["city"] == sell_city), 0)
+        data = response.json()
+        raw_price = next((item["sell_price_min"] for item in data if item["item_id"] == raw_item and item["city"] == buy_city), 0)
+        refined_price = next((item["sell_price_min"] for item in data if item["item_id"] == refined_item and item["city"] == sell_city), 0)
     
-    if raw_price == 0 or refined_price == 0:
-        await update.message.reply_text("Цены не найдены для выбранных параметров.")
-        return ConversationHandler.END
+        if raw_price == 0 or refined_price == 0:
+            await update.message.reply_text("Цены не найдены для выбранных параметров.")
+            return ConversationHandler.END
     
-    # Расчёт прибыли
-    bonus_rrr = REFINING_BONUSES.get(refine_city, {}).get(resource, 0)
-    total_rrr = rrr + (rrr * bonus_rrr)
-    material_cost = raw_price * (1 - total_rrr / 100)
-    refining_cost = material_cost * 0.05  # Предположим 5% налог
-    total_cost = material_cost + refining_cost
-    profit = refined_price - total_cost
+        # Расчёт прибыли
+        bonus_rrr = REFINING_BONUSES.get(refine_city, {}).get(resource, 0)
+        total_rrr = rrr + (rrr * bonus_rrr)
+        material_cost = raw_price * (1 - total_rrr / 100)
+        refining_cost = material_cost * 0.05  # Предположим 5% налог
+        total_cost = material_cost + refining_cost
+        profit = refined_price - total_cost
     
-    await update.message.reply_text(
-        f"Ресурс: {resource} {tier}\n"
-        f"Город покупки: {buy_city}\n"
-        f"Город переработки: {refine_city}\n"
-        f"Город продажи: {sell_city}\n"
-        f"Цена сырья (API): {raw_price} серебра\n"
-        f"Цена готового ресурса (API): {refined_price} серебра\n"
-        f"Возврат ресурсов (RRR): {total_rrr:.2f}%\n"
-        f"Прибыль: {profit:.2f} серебра"
-    )
+        await update.message.reply_text(
+            f"Ресурс: {resource} {tier}\n"
+            f"Город покупки: {buy_city}\n"
+            f"Город переработки: {refine_city}\n"
+            f"Город продажи: {sell_city}\n"
+            f"Цена сырья (API): {raw_price} серебра\n"
+            f"Цена готового ресурса (API): {refined_price} серебра\n"
+            f"Возврат ресурсов (RRR): {total_rrr:.2f}%\n"
+            f"Прибыль: {profit:.2f} серебра"
+        )
+    except Exception as e:
+        await update.message.reply_text(f"Ошибка: {str(e)}")
     return ConversationHandler.END
 
 async def best(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Поиск самых выгодных предложений
-    results = []
-    for resource in RESOURCES:
-        for tier in TIERS:
-            for buy_city in CITIES:
-                for refine_city in CITIES:
-                    for sell_city in CITIES:
-                        raw_item = f"{resource}_{tier.replace('.', '_')}"
-                        refined_item = f"{resource.replace('ROCK', 'STONE')}_PLANKS_{tier.replace('.', '_')}" if resource == "WOOD" else \
-                                      f"{resource}_METALBAR_{tier.replace('.', '_')}" if resource == "ORE" else \
-                                      f"{resource}_CLOTH_{tier.replace('.', '_')}" if resource == "FIBER" else \
-                                      f"{resource}_LEATHER_{tier.replace('.', '_')}" if resource == "HIDE" else \
-                                      f"{resource}_STONEBLOCK_{tier.replace('.', '_')}"
-                        
-                        api_url = f"https://www.albion-online-data.com/api/v2/stats/prices/{raw_item},{refined_item}?locations={buy_city},{sell_city}"
-                        response = requests.get(api_url)
-                        if response.status_code != 200:
-                            continue
-                        
-                        data = response.json()
-                        raw_price = next((item["sell_price_min"] for item in data if item["item_id"] == raw_item and item["city"] == buy_city), 0)
-                        refined_price = next((item["sell_price_min"] for item in data if item["item_id"] == refined_item and item["city"] == sell_city), 0)
-                        
-                        if raw_price == 0 or refined_price == 0:
-                            continue
-                        
-                        rrr = 15.2  # Базовый RRR
-                        bonus_rrr = REFINING_BONUSES.get(refine_city, {}).get(resource, 0)
-                        total_rrr = rrr + (rrr * bonus_rrr)
-                        material_cost = raw_price * (1 - total_rrr / 100)
-                        refining_cost = material_cost * 0.05
-                        total_cost = material_cost + refining_cost
-                        profit = refined_price - total_cost
-                        
-                        if profit > 0:
-                            results.append({
-                                "resource": resource,
-                                "tier": tier,
-                                "buy_city": buy_city,
-                                "refine_city": refine_city,
-                                "sell_city": sell_city,
-                                "profit": profit,
-                                "raw_price": raw_price,
-                                "refined_price": refined_price
-                            })
-    
-    # Сортировка по прибыли
-    results.sort(key=lambda x: x["profit"], reverse=True)
-    top_results = results[:5]  # Топ-5 предложений
-    
-    response = "Самые выгодные предложения:\n\n"
-    for i, res in enumerate(top_results, 1):
-        response += (
-            f"{i}. {res['resource']} {res['tier']}\n"
-            f"Покупка: {res['buy_city']} ({res['raw_price']} серебра)\n"
-            f"Переработка: {res['refine_city']}\n"
-            f"Продажа: {res['sell_city']} ({res['refined_price']} серебра)\n"
-            f"Прибыль: {res['profit']:.2f} серебра\n\n"
-        )
-    
-    await update.message.reply_text(response or "Нет выгодных предложений на данный момент.")
+    try:
+        results = []
+        for resource in RESOURCES:
+            for tier in TIERS[:5]:  # Проверяем только T2-T6 для скорости
+                for buy_city in CITIES:
+                    for refine_city in CITIES:
+                        for sell_city in CITIES:
+                            raw_item = f"{resource}_{tier.replace('.', '_')}"
+                            refined_item = f"{resource.replace('ROCK', 'STONE')}_PLANKS_{tier.replace('.', '_')}" if resource == "WOOD" else \
+                                          f"{resource}_METALBAR_{tier.replace('.', '_')}" if resource == "ORE" else \
+                                          f"{resource}_CLOTH_{tier.replace('.', '_')}" if resource == "FIBER" else \
+                                          f"{resource}_LEATHER_{tier.replace('.', '_')}" if resource == "HIDE" else \
+                                          f"{resource}_STONEBLOCK_{tier.replace('.', '_')}"
+                            
+                            api_url = f"https://www.albion-online-data.com/api/v2/stats/prices/{raw_item},{refined_item}?locations={buy_city},{sell_city}"
+                            response = requests.get(api_url, timeout=5)
+                            if response.status_code != 200:
+                                continue
+                            
+                            data = response.json()
+                            raw_price = next((item["sell_price_min"] for item in data if item["item_id"] == raw_item and item["city"] == buy_city), 0)
+                            refined_price = next((item["sell_price_min"] for item in data if item["item_id"] == refined_item and item["city"] == sell_city), 0)
+                            
+                            if raw_price == 0 or refined_price == 0:
+                                continue
+                            
+                            rrr = 15.2  # Базовый RRR
+                            bonus_rrr = REFINING_BONUSES.get(refine_city, {}).get(resource, 0)
+                            total_rrr = rrr + (rrr * bonus_rrr)
+                            material_cost = raw_price * (1 - total_rrr / 100)
+                            refining_cost = material_cost * 0.05
+                            total_cost = material_cost + refining_cost
+                            profit = refined_price - total_cost
+                            
+                            if profit > 0:
+                                results.append({
+                                    "resource": resource,
+                                    "tier": tier,
+                                    "buy_city": buy_city,
+                                    "refine_city": refine_city,
+                                    "sell_city": sell_city,
+                                    "profit": profit,
+                                    "raw_price": raw_price,
+                                    "refined_price": refined_price
+                                })
+        
+        results.sort(key=lambda x: x["profit"], reverse=True)
+        top_results = results[:5]
+        
+        response = "Самые выгодные предложения:\n\n"
+        for i, res in enumerate(top_results, 1):
+            response += (
+                f"{i}. {res['resource']} {res['tier']}\n"
+                f"Покупка: {res['buy_city']} ({res['raw_price']} серебра)\n"
+                f"Переработка: {res['refine_city']}\n"
+                f"Продажа: {res['sell_city']} ({res['refined_price']} серебра)\n"
+                f"Прибыль: {res['profit']:.2f} серебра\n\n"
+            )
+        
+        await update.message.reply_text(response or "Нет выгодных предложений на данный момент.")
+    except Exception as e:
+        await update.message.reply_text(f"Ошибка: {str(e)}")
     return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Операция отменена.")
     return ConversationHandler.END
-# ====== НАЧАЛО ДОБАВЛЯЕМОГО КОДА ======
-from threading import Thread
-import requests
-import time
-
-async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик для проверки работы бота"""
-    await update.message.reply_text("✅ Бот активен")
-    return "pong"
 
 def keep_alive():
     """Функция для периодического пробуждения сервиса"""
     while True:
         time.sleep(240)  # Каждые 4 минуты
         try:
-            requests.get(f'https://albion-refine-bot.onrender.com/ping')
-        except Exception as e:
-            print(f"Ping error: {e}")
+            requests.get(f'{WEBHOOK_URL}/ping', timeout=5)
+        except:
+            pass
 
-# Добавляем обработчик команды /ping
-app.add_handler(CommandHandler("ping", ping))
-
-# Запускаем фоновый поток
-Thread(target=keep_alive, daemon=True).start()
-# ====== КОНЕЦ ДОБАВЛЯЕМОГО КОДА ======
-# ============ ЗАПУСК ПРИЛОЖЕНИЯ ============
-def setup_handlers():
+def setup_handlers(app):
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("refine", refine)],
         states={
@@ -345,7 +337,14 @@ def setup_handlers():
     app.add_handler(conv_handler)
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("best", best))
+    app.add_handler(CommandHandler("ping", ping))
+
 if __name__ == '__main__':
-    setup_handlers()
-    print("🟢 Бот запущен в polling-режиме")
+    app = Application.builder().token(TOKEN).build()
+    setup_handlers(app)
+    
+    # Запускаем keep_alive в отдельном потоке
+    Thread(target=keep_alive, daemon=True).start()
+    
+    print("🟢 Бот запущен")
     app.run_polling(drop_pending_updates=True)

@@ -1,24 +1,38 @@
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, ConversationHandler
-from telegram.ext import MessageHandler, filters
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    CallbackQueryHandler,
+    ContextTypes,
+    ConversationHandler,
+    MessageHandler,
+    filters
+)
 import requests
 import json
+import os
 
 # Настройка логирования
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
-# Токен бота (получи через @BotFather)
-TOKEN = "7388144074:AAFkIqUuXeJTIZPB3zE3nHuR6OYpgcf80NU"
-
+# Токен бота из переменных окружения
+TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '7388144074:AAFkIqUuXeJTIZPB3zE3nHuR6OYpgcf80NU')
 
 # Списки данных
 RESOURCES = ["WOOD", "ORE", "FIBER", "HIDE", "ROCK"]
-TIERS = ["T2", "T3", "T4", "T4.1", "T4.2", "T4.3", "T4.4", "T5", "T5.1", "T5.2", "T5.3", "T5.4", "T6", "T6.1", "T6.2", "T6.3", "T6.4", "T7", "T7.1", "T7.2", "T7.3", "T7.4", "T8", "T8.1", "T8.2", "T8.3", "T8.4"]
-CITIES = ["Caerleon", "Thetford", "Fort Sterling", "Lymhurst", "Bridgewatch", "Martlock", "Black Market"]
+TIERS = ["T2", "T3", "T4", "T4.1", "T4.2", "T4.3", "T4.4", "T5", "T5.1", "T5.2", 
+         "T5.3", "T5.4", "T6", "T6.1", "T6.2", "T6.3", "T6.4", "T7", "T7.1", 
+         "T7.2", "T7.3", "T7.4", "T8", "T8.1", "T8.2", "T8.3", "T8.4"]
+CITIES = ["Caerleon", "Thetford", "Fort Sterling", "Lymhurst", 
+          "Bridgewatch", "Martlock", "Black Market"]
+          
 REFINING_BONUSES = {
-    "Thetford": {"FIBER": 0.15},  # +15% к возврату для ткани
+    "Thetford": {"FIBER": 0.15},
     "Fort Sterling": {"ORE": 0.15},
     "Lymhurst": {"WOOD": 0.15},
     "Bridgewatch": {"ROCK": 0.15},
@@ -29,6 +43,9 @@ REFINING_BONUSES = {
 
 # Состояния для ConversationHandler
 MODE, RESOURCE, TIER, BUY_CITY, REFINE_CITY, SELL_CITY, RRR, TAX, PRICES = range(9)
+
+# Создаем приложение
+app = Application.builder().token(TOKEN).build()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -280,9 +297,8 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Операция отменена.")
     return ConversationHandler.END
 
-def main():
-    app = Application.builder().token(TOKEN).build()
-    
+# Настройка обработчиков
+def setup_handlers():
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("refine", refine)],
         states={
@@ -302,13 +318,18 @@ def main():
     app.add_handler(conv_handler)
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("best", best))
-    
-    app.run_polling()
 
 if __name__ == '__main__':
+    setup_handlers()
+    
+    # Получаем параметры из переменных окружения
+    webhook_url = os.getenv('WEBHOOK_URL', 'https://albion-refine-bot-che3sterr.onrender.com')
+    port = int(os.getenv('PORT', 10000))
+    secret_token = os.getenv('WEBHOOK_SECRET', 'AlbionBot$Refine2023#Secure@Render')
+    
     app.run_webhook(
-        listen="0.0.0.0",  # Слушаем все входящие соединения
-        port=10000,  # Порт (можно оставить 10000)
-        webhook_url="https://albion-refine-bot-che3sterr.onrender.com",  # Твой URL из Render
-        secret_token="RANDOM_SECRET_STRING"  # Любая случайная строка для безопасности
+        listen="0.0.0.0",
+        port=port,
+        webhook_url=webhook_url,
+        secret_token=secret_token
     )

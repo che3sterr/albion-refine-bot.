@@ -322,14 +322,5 @@ def setup_handlers():
 if __name__ == '__main__':
     setup_handlers()
     
-    # Получаем параметры из переменных окружения
-    webhook_url = os.getenv('WEBHOOK_URL', 'https://albion-refine-bot-che3sterr.onrender.com')
-    port = int(os.getenv('PORT', 10000))
-    secret_token = os.getenv('WEBHOOK_SECRET', 'AlbionBot$Refine2023#Secure@Render')
-    
-    app.run_webhook(
-        listen="0.0.0.0",
-        port=port,
-        webhook_url=webhook_url,
-        secret_token=secret_token
-    )
+    # Временное решение - используем polling
+    app.run_polling()

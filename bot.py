@@ -322,5 +322,7 @@ def setup_handlers():
 if __name__ == '__main__':
     setup_handlers()
     
-    # Временное решение - используем polling
-    app.run_polling()
+    # Для теста - используйте этот вариант (polling + порт)
+    app.run_polling(
+        close_loop=False,
+        port=int(os.getenv('PORT', 10000))  # Добавьте этот параметр

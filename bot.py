@@ -15,7 +15,7 @@ import os
 # ================== НАСТРОЙКИ ==================
 TOKEN = '7388144074:AAFkIqUuXeJTIZPB3zE3nHuR6OYpgcf80NU'
 WEBHOOK_URL = 'https://albion-refine-bot-che3sterr.onrender.com'
-SECRET_TOKEN = 'AlbionBot$Refine2023#Secure@Render'
+SECRET_TOKEN = 'AlbionBotSecureToken2023'  # Только латинские буквы и цифры
 PORT = 10000
 # ================================================
 

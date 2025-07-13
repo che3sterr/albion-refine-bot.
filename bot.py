@@ -319,10 +319,7 @@ def setup_handlers():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("best", best))
 
+
 if __name__ == '__main__':
     setup_handlers()
-    
-    # Для теста - используйте этот вариант (polling + порт)
-    app.run_polling(
-        close_loop=False,
-        port=int(os.getenv('PORT', 10000))  # Добавьте этот параметр
+    app.run_polling()  # Самый простой рабочий вариант

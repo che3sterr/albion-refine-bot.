@@ -309,6 +309,6 @@ if __name__ == '__main__':
     app.run_webhook(
         listen="0.0.0.0",  # Слушаем все входящие соединения
         port=10000,  # Порт (можно оставить 10000)
-        webhook_url="https://your-render-url.onrender.com",  # Твой URL из Render
+        webhook_url="https://albion-refine-bot-che3sterr.onrender.com",  # Твой URL из Render
         secret_token="RANDOM_SECRET_STRING"  # Любая случайная строка для безопасности
     )
